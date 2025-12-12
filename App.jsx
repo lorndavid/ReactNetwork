@@ -1,7 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { createRoot } from 'react-dom/client';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, update, remove, push } from 'firebase/database';
+import React, { useState, useEffect, useContext, useRef } from "react";
+import { createRoot } from "react-dom/client";
+import { initializeApp } from "firebase/app";
+import {
+  getDatabase,
+  ref,
+  onValue,
+  set,
+  update,
+  remove,
+  push,
+} from "firebase/database";
 
 // --- Firebase Config ---
 const firebaseConfig = {
@@ -11,225 +19,447 @@ const firebaseConfig = {
   storageBucket: "internet-manegement-di.firebasestorage.app",
   messagingSenderId: "811368710372",
   appId: "1:811368710372:web:cea6c0f90facb83a702cf1",
-  measurementId: "G-R5J0V7N6VD"
+  measurementId: "G-R5J0V7N6VD",
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// --- Components ---
-
-const NavItem = ({ icon, label, active, onClick, count }) => (
-  <button 
-    onClick={onClick}
-    className={`w-full flex items-center justify-between px-4 py-3 mb-1 rounded-xl transition-all duration-200 ${
-      active 
-        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-    }`}
-  >
-    <div className="flex items-center gap-3">
-      <i className={`fas ${icon} w-5 text-center text-lg ${active ? 'text-white' : 'text-slate-400'}`}></i>
-      <span className="font-battambang text-sm font-bold tracking-wide pt-0.5">{label}</span>
-    </div>
-    {count !== undefined && (
-      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-400'}`}>
-        {count}
-      </span>
-    )}
-  </button>
-);
-
-const StatCard = ({ title, value, icon, color, bg }) => (
-  <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex items-center justify-between">
-    <div>
-      <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider mb-0.5 font-inter">{title}</p>
-      <p className="text-xl font-black text-slate-800 font-inter leading-none">{value}</p>
-    </div>
-    <div className={`w-8 h-8 rounded-full ${bg} flex items-center justify-center text-sm shadow-sm`}>
-      <i className={`fas ${icon} ${color}`}></i>
-    </div>
-  </div>
-);
-
-const FilterBar = ({ searchTerm, setSearchTerm, filterStatus, setFilterStatus }) => (
-  <div className="mb-5 space-y-3 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-    <div className="relative w-full">
-      <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-      <input 
-        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none custom-input transition-all font-battambang placeholder:text-slate-400"
-        placeholder="Search Cabin, PC..."
-        value={searchTerm}
-        onChange={e => setSearchTerm(e.target.value)}
-      />
-    </div>
-    
-    <div className="flex items-center gap-3">
-       <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider min-w-fit">FILTER:</span>
-       <div className="relative flex-1">
-         <select 
-            className="w-full pl-3 pr-8 py-2 text-xs font-bold border border-slate-200 rounded-lg bg-white text-slate-600 outline-none focus:border-indigo-500 cursor-pointer appearance-none shadow-sm"
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-         >
-            <option value="all">All Status</option>
-            <option value="connected">Online Only</option>
-            <option value="offline">Offline Only</option>
-            <option value="idle">Idle Only</option>
-         </select>
-         <i className="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[10px] pointer-events-none"></i>
-       </div>
-    </div>
-  </div>
-);
-
-const PC_Card = ({ pc, pcNum, onClick }) => {
-  let cardClass = "bg-white border-slate-200";
-  let content;
-
-  if (pc.status === 'connected') {
-    // Online Style
-    cardClass = "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-400/20";
-    content = (
-      <div className="flex flex-col items-center justify-center h-full w-full">
-         <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center mb-1 shadow-sm">
-            <i className="fas fa-check text-[10px]"></i>
-         </div>
-         <span className="text-emerald-900 font-bold font-battambang text-[10px] leading-tight text-center line-clamp-1 w-full px-1">
-           {pc.info || 'User'}
-         </span>
-         <span className="text-emerald-600/70 font-inter text-[9px] font-bold mt-0.5">PC-{pcNum}</span>
-      </div>
-    );
-  } else if (pc.status === 'offline') {
-    // Offline Style
-    cardClass = "bg-red-50 border-red-200";
-    content = (
-      <div className="flex flex-col items-center justify-center h-full opacity-80">
-         <i className="fas fa-exclamation-circle text-lg mb-1 text-red-400"></i>
-         <span className="text-red-400 font-bold font-inter text-[10px]">PC-{pcNum}</span>
-      </div>
-    );
-  } else {
-    // Idle Style
-    content = (
-      <div className="flex flex-col items-center justify-center h-full opacity-40">
-         <i className="fas fa-desktop text-2xl mb-1 text-slate-400"></i>
-         <span className="text-slate-400 font-bold font-inter text-[10px]">PC-{pcNum}</span>
-      </div>
-    );
+// --- ADVANCED STYLING & ANIMATIONS ---
+const styles = document.createElement("style");
+styles.innerHTML = `
+  @import url('https://fonts.googleapis.com/css2?family=Battambang:wght@300;400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+  
+  :root {
+    --primary: #6366f1;
+    --primary-dark: #4f46e5;
+    --bg-light: #f8fafc;
+    /* Deeper dark background for better contrast */
+    --bg-dark: #020617; 
+    --card-light: rgba(255, 255, 255, 0.85);
+    --card-dark: rgba(30, 41, 59, 0.6);
+    --glass-border-light: 1px solid rgba(255, 255, 255, 0.5);
+    --glass-border-dark: 1px solid rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
   }
 
+  body { font-family: 'Plus Jakarta Sans', sans-serif; transition: background-color 0.3s ease; }
+  .font-battambang { font-family: 'Battambang', cursive; }
+  
+  /* Themes */
+  .theme-light { background-color: var(--bg-light); color: #1e293b; }
+  .theme-dark { background-color: var(--bg-dark); color: #f8fafc; }
+  
+  .theme-dark .glass-panel { 
+    background: var(--card-dark); 
+    border: var(--glass-border-dark); 
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  }
+  
+  .theme-light .glass-panel {
+    background: var(--card-light);
+    border: var(--glass-border-light);
+    box-shadow: var(--glass-shadow);
+  }
+  
+  .theme-dark .text-slate-400 { color: #94a3b8; }
+  .theme-dark .text-slate-500 { color: #64748b; }
+  .theme-dark .text-slate-600 { color: #cbd5e1; }
+  .theme-dark .text-slate-700 { color: #e2e8f0; }
+  .theme-dark input, .theme-dark select { background: #1e293b; border-color: #334155; color: white; }
+  
+  /* Glassmorphism Base */
+  .glass-panel {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* Animations */
+  @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+  .animate-enter { animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  
+  @keyframes pulse-soft { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+  .pulse-active { animation: pulse-soft 2s infinite; }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  .theme-dark ::-webkit-scrollbar-thumb { background: #334155; }
+
+  /* 3D Tilt Effect on Hover */
+  .hover-3d { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+  .hover-3d:hover { transform: translateY(-3px) scale(1.01); }
+`;
+document.head.appendChild(styles);
+
+// --- CONTEXTS ---
+
+const ThemeContext = React.createContext();
+const ToastContext = React.createContext();
+
+const ThemeProvider = ({ children }) => {
+  // CHANGED: Default state is now "dark"
+  const [theme, setTheme] = useState("dark");
+
+  useEffect(() => {
+    document.body.className = `theme-${theme}`;
+  }, [theme]);
   return (
-    <div 
-      className={`pc-card relative aspect-[4/3] sm:aspect-[1.5/1] rounded-xl border flex flex-col cursor-pointer p-1 ${cardClass}`}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-    >
-      {content}
-    </div>
+    <ThemeContext.Provider value={{ theme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
   );
 };
 
-const CabinCard = ({ cabinId, cabin, isExpanded, toggleExpand, onDelete, section, onEditTable, onEditPC }) => {
-  let activeCount = 0;
-  let totalPC = 0;
-  
-  if (cabin.tables) {
-    Object.values(cabin.tables).forEach(table => {
-      Object.values(table.pcs).forEach(pc => {
-        totalPC++;
-        if(pc.status === 'connected') activeCount++;
-      });
-    });
+const ToastProvider = ({ children }) => {
+  const [toasts, setToasts] = useState([]);
+  const addToast = (msg, type = "success") => {
+    const id = Date.now();
+    setToasts((p) => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3000);
+  };
+  return (
+    <ToastContext.Provider value={addToast}>
+      {children}
+      <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl border backdrop-blur-md animate-enter ${
+              t.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
+            } bg-white dark:bg-slate-800`}
+          >
+            <i
+              className={`fas ${
+                t.type === "success" ? "fa-check-circle" : "fa-times-circle"
+              }`}
+            ></i>
+            <span className="text-xs font-bold font-battambang">{t.msg}</span>
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+};
+
+// --- UI COMPONENTS ---
+
+const Skeleton = ({ className }) => (
+  <div
+    className={`animate-pulse bg-slate-200 dark:bg-slate-800 rounded ${className}`}
+  ></div>
+);
+
+const Badge = ({ children, color = "indigo" }) => {
+  const colors = {
+    indigo:
+      "bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20",
+    emerald:
+      "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20",
+    rose: "bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20",
+    slate:
+      "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700/50 dark:text-slate-400 dark:border-slate-600",
+  };
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${colors[color]}`}
+    >
+      {children}
+    </span>
+  );
+};
+
+const StatWidget = ({ title, value, icon, trend, color, delay }) => (
+  <div
+    className="glass-panel p-5 rounded-2xl relative overflow-hidden group hover-3d"
+    style={{ animationDelay: `${delay}ms` }}
+  >
+    <div
+      className={`absolute top-0 right-0 w-20 h-20 bg-${color}-500 opacity-[0.08] rounded-bl-full transition-transform group-hover:scale-110`}
+    ></div>
+    <div className="flex justify-between items-start relative z-10">
+      <div>
+        <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2">
+          {title}
+        </h4>
+        <div className="flex items-end gap-2">
+          <span className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white">
+            {value}
+          </span>
+          {trend && (
+            <span className="text-[10px] font-bold text-emerald-500 mb-1.5">
+              <i className="fas fa-arrow-up"></i> {trend}%
+            </span>
+          )}
+        </div>
+      </div>
+      <div
+        className={`w-10 h-10 rounded-xl bg-${color}-50 dark:bg-${color}-500/20 flex items-center justify-center text-${color}-500 shadow-sm border border-${color}-100 dark:border-${color}-500/30`}
+      >
+        <i className={`fas ${icon} text-lg`}></i>
+      </div>
+    </div>
+    <div className="mt-4 h-1 w-full bg-slate-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
+      <div className={`h-full bg-${color}-500 w-2/3 rounded-full`}></div>
+    </div>
+  </div>
+);
+
+const ContextMenu = ({ x, y, onClose, onAction }) => (
+  <div
+    className="fixed z-50 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-xl rounded-lg py-1 w-40 flex flex-col animate-enter"
+    style={{ top: y, left: x }}
+    onMouseLeave={onClose}
+  >
+    <button
+      onClick={() => onAction("ping")}
+      className="px-4 py-2 text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 flex items-center gap-2"
+    >
+      <i className="fas fa-signal text-xs"></i> Ping Device
+    </button>
+    <button
+      onClick={() => onAction("edit")}
+      className="px-4 py-2 text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-600 flex items-center gap-2"
+    >
+      <i className="fas fa-edit text-xs"></i> Edit Details
+    </button>
+    <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
+    <button
+      onClick={() => onAction("reset")}
+      className="px-4 py-2 text-left text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2"
+    >
+      <i className="fas fa-power-off text-xs"></i> Reset
+    </button>
+  </div>
+);
+
+const PC_Node = ({ pc, pcNum, onClick }) => {
+  const [contextMenu, setContextMenu] = useState(null);
+
+  const handleRightClick = (e) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const closeMenu = () => setContextMenu(null);
+
+  let statusClass =
+    "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 hover:border-slate-300 dark:hover:border-slate-500";
+  let ringClass = "";
+
+  if (pc.status === "connected") {
+    statusClass =
+      "bg-emerald-50/50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400";
+    ringClass = "pulse-active";
+  } else if (pc.status === "offline") {
+    statusClass =
+      "bg-rose-50/50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-500";
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4 overflow-hidden">
-      {/* Cabin Header */}
-      <div 
-        className="px-4 py-3 flex items-center justify-between bg-white cursor-pointer active:bg-slate-50 transition-colors border-b border-slate-50"
-        onClick={toggleExpand}
+    <>
+      <div
+        onClick={onClick}
+        onContextMenu={handleRightClick}
+        className={`relative aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all duration-300 hover:scale-[1.03] active:scale-95 hover:shadow-lg ${statusClass}`}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 text-lg shadow-sm">
-             <i className="fas fa-server"></i>
+        {pc.status === "connected" && (
+          <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 flex h-1.5 w-1.5 md:h-2 md:w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 md:h-2 md:w-2 bg-emerald-500"></span>
+          </span>
+        )}
+
+        {/* CHANGED: Icons and Text are smaller on mobile (default) and larger on md screens */}
+        <i
+          className={`fas fa-desktop text-sm md:text-xl mb-1 md:mb-2 ${ringClass}`}
+        ></i>
+
+        <span className="text-[8px] md:text-[10px] font-black uppercase tracking-wider">
+          PC {pcNum}
+        </span>
+
+        {pc.info && (
+          <div className="absolute inset-x-0 bottom-0 bg-slate-900/90 backdrop-blur-[2px] p-0.5 md:p-1 rounded-b-lg opacity-0 hover:opacity-100 transition-opacity">
+            <p className="text-[7px] md:text-[9px] text-white text-center font-battambang truncate px-1">
+              {pc.info}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeMenu}
+          onAction={(action) => {
+            if (action === "edit") onClick();
+            closeMenu();
+          }}
+        />
+      )}
+    </>
+  );
+};
+
+const CabinCard = ({
+  cabin,
+  id,
+  isExpanded,
+  toggle,
+  section,
+  onEditPC,
+  onEditTable,
+  onDelete,
+}) => {
+  const total = Object.values(cabin.tables || {}).reduce(
+    (acc, t) => acc + Object.keys(t.pcs || {}).length,
+    0
+  );
+  const active = Object.values(cabin.tables || {}).reduce(
+    (acc, t) =>
+      acc +
+      Object.values(t.pcs || {}).filter((p) => p.status === "connected").length,
+    0
+  );
+
+  const pct = total ? (active / total) * 100 : 0;
+
+  return (
+    <div className="glass-panel rounded-2xl mb-4 md:mb-6 overflow-hidden transition-all duration-500 hover:shadow-xl group border border-slate-100 dark:border-white/5">
+      {/* Header */}
+      <div
+        className="p-4 md:p-5 flex items-center justify-between cursor-pointer bg-white/40 dark:bg-slate-800/30 hover:bg-white/60 dark:hover:bg-slate-800/50 transition-colors"
+        onClick={toggle}
+      >
+        <div className="flex items-center gap-3 md:gap-5">
+          <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-lg md:text-2xl shadow-lg shadow-indigo-500/20">
+            <i className="fas fa-server"></i>
           </div>
           <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <h3 className="text-sm font-bold text-slate-800 font-inter">{cabin.name}</h3>
-              <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md font-bold uppercase tracking-wide">#{cabin.number}</span>
+            <div className="flex items-center gap-2 md:gap-3 mb-1">
+              <h3 className="text-sm md:text-lg font-bold text-slate-800 dark:text-white truncate max-w-[120px] md:max-w-none">
+                {cabin.name}
+              </h3>
+              <div className="hidden md:flex gap-2">
+                <Badge color="slate">{cabin.number}</Badge>
+                {cabin.type === "RA" ? (
+                  <Badge color="indigo">Zone A</Badge>
+                ) : (
+                  <Badge color="emerald">Zone B</Badge>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-500 font-battambang">
-              <span className={`w-2 h-2 rounded-full ${activeCount > 0 ? 'status-active' : 'bg-slate-300'}`}></span>
-              <span className="font-bold text-slate-700">{activeCount}</span> / {totalPC} កំពុងប្រើ
+
+            <div className="flex md:hidden gap-1 mb-1">
+              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                {cabin.number}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 w-32 md:w-64">
+              <div className="flex-1 h-1.5 md:h-2 bg-slate-200 dark:bg-slate-700/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                  style={{ width: `${pct}%` }}
+                ></div>
+              </div>
+              <span className="text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                {active}/{total}
+              </span>
             </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-           {cabin.equipment?.manage && (
-             <span className="hidden sm:inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold border border-indigo-100 rounded">SW:{cabin.equipment.manage.ports}</span>
-           )}
-           <i className={`fas fa-chevron-down text-slate-300 text-[10px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}></i>
+
+        <div className="flex items-center gap-4">
+          {/* Equipment Icons */}
+          <div className="hidden md:flex gap-2">
+            {cabin.equipment?.manage && (
+              <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center text-slate-500 text-xs border border-transparent dark:border-white/5">
+                <i className="fas fa-network-wired"></i>
+              </div>
+            )}
+          </div>
+
+          <button
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform duration-300 ${
+              isExpanded ? "rotate-180 bg-slate-200 dark:bg-slate-700" : ""
+            }`}
+          >
+            <i className="fas fa-chevron-down text-slate-400"></i>
+          </button>
         </div>
       </div>
 
-      {/* Cabin Body */}
+      {/* Expanded Body */}
       {isExpanded && (
-        <div className="px-3 pb-3 bg-slate-50/50">
-          <div className="space-y-4 pt-3">
-            {cabin.tables && Object.entries(cabin.tables).map(([tableId, table]) => {
-              
-              let pcEntries = Object.entries(table.pcs);
-              
-              // Zone B: Reverse logic (PC 6 left, PC 1 right)
-              if (section === 'RB') {
-                pcEntries.reverse(); 
-              }
+        <div className="border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-black/20 p-3 md:p-6 animate-enter">
+          <div className="grid gap-4 md:gap-6">
+            {cabin.tables &&
+              Object.entries(cabin.tables).map(([tid, table]) => {
+                const pcs = Object.entries(table.pcs || {});
+                if (section === "RB") pcs.reverse();
 
-              return (
-                <div key={tableId}>
-                   {/* Table Header */}
-                   <div className="flex justify-between items-center mb-2 px-1">
-                     <div className="flex items-center gap-2">
-                       <div className="h-3 w-1 bg-indigo-500 rounded-full"></div>
-                       <span className="text-xs font-bold text-slate-700 font-battambang">
-                         {table.name.replace('Table', 'តុ')}
-                       </span>
-                     </div>
-                     <button className="w-6 h-6 rounded-full bg-white border border-slate-100 text-slate-300 hover:text-indigo-500 hover:border-indigo-100 flex items-center justify-center transition-all shadow-sm" 
-                       onClick={(e) => { e.stopPropagation(); onEditTable(`zones/${section}/${cabinId}/tables/${tableId}`, table.name); }}>
-                       <i className="fas fa-pen text-[9px]"></i>
-                     </button>
-                   </div>
-                   
-                   {/* GRID LAYOUT UPDATE */}
-                   {/* Mobile: 3 Columns (2 Rows). PC: 6 Columns (1 Row). */}
-                   <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
-                     {pcEntries.map(([pcId, pc]) => {
-                       const pcNum = parseInt(pcId.replace('pc', '')); 
-                       return (
-                         <PC_Card 
-                            key={pcId} 
-                            pc={pc} 
-                            pcNum={pcNum} 
-                            onClick={() => onEditPC(`zones/${section}/${cabinId}/tables/${tableId}/pcs/${pcId}`, pc)}
-                         />
-                       );
-                     })}
-                   </div>
-                </div>
-              );
-            })}
+                return (
+                  <div
+                    key={tid}
+                    className="bg-white dark:bg-slate-900/40 p-3 md:p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm"
+                  >
+                    <div className="flex justify-between items-center mb-3 md:mb-4 border-b border-slate-50 dark:border-slate-800 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1 h-3 md:w-1.5 md:h-4 bg-indigo-500 rounded-full"></span>
+                        <h5 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300 font-battambang">
+                          {table.name || "Table"}
+                        </h5>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditTable(
+                            `zones/${section}/${id}/tables/${tid}`,
+                            table.name
+                          );
+                        }}
+                        className="text-slate-300 hover:text-indigo-500 transition-colors"
+                      >
+                        <i className="fas fa-pencil-alt text-xs"></i>
+                      </button>
+                    </div>
+
+                    {/* CHANGED: grid-cols-3 on mobile (2 rows of 3), grid-cols-6 on desktop */}
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 md:gap-3">
+                      {pcs.map(([pid, pc]) => (
+                        <PC_Node
+                          key={pid}
+                          pc={pc}
+                          pcNum={pid.replace("pc", "")}
+                          onClick={() =>
+                            onEditPC(
+                              `zones/${section}/${id}/tables/${tid}/pcs/${pid}`,
+                              pc,
+                              cabin.name,
+                              table.name,
+                              section
+                            )
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
-
-          <div className="mt-4 pt-2 border-t border-slate-200 flex justify-end">
-             <button 
-                onClick={(e) => { e.stopPropagation(); onDelete(); }} 
-                className="text-[9px] font-bold text-red-400 hover:text-red-600 bg-white border border-slate-200 hover:border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors font-battambang flex items-center gap-1.5 shadow-sm"
-             >
-               <i className="fas fa-trash-alt"></i> លុបបន្ទប់
-             </button>
+          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+            <button
+              onClick={onDelete}
+              className="text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <i className="fas fa-trash-alt"></i> Delete Cabin
+            </button>
           </div>
         </div>
       )}
@@ -237,470 +467,896 @@ const CabinCard = ({ cabinId, cabin, isExpanded, toggleExpand, onDelete, section
   );
 };
 
-// --- Modals ---
+// --- WIZARD MODAL: ADD CABIN ---
 
-const Modal = ({ title, onClose, children, footer }) => (
-  <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
-    <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[90vh]">
-      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-white rounded-t-2xl">
-        <h5 className="font-bold text-base text-slate-800 font-battambang">{title}</h5>
-        <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 flex items-center justify-center transition-colors">
-          <i className="fas fa-times text-sm"></i>
-        </button>
-      </div>
-      <div className="p-5 overflow-y-auto font-battambang custom-scrollbar">
-        {children}
-      </div>
-      {footer && (
-        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl flex justify-end gap-2">
-          {footer}
-        </div>
-      )}
-    </div>
-  </div>
-);
+const AddCabinWizard = ({ onClose, onCreate, currentView }) => {
+  const [step, setStep] = useState(1);
+  const isLocked = currentView === "RA" || currentView === "RB";
 
-const AddCabinModal = ({ onClose, onCreate }) => {
-  const [formData, setFormData] = useState({
-    name: '', number: '', section: 'RB',
+  const [data, setData] = useState({
+    name: "",
+    number: "",
+    section: isLocked ? currentView : "RB",
     equipment: {
-      manage: { checked: true, ports: '48', name: '' },
-      router: { checked: false, ports: '12', name: '' },
-      poe: { checked: false, ports: '24', name: '' }
-    }
+      manage: { c: true, p: "48" },
+      router: { c: false, p: "12" },
+      poe: { c: false, p: "24" },
+    },
   });
 
-  const updateEq = (type, field, val) => {
-    setFormData(prev => ({
-      ...prev,
-      equipment: { ...prev.equipment, [type]: { ...prev.equipment[type], [field]: val } }
+  const updateEq = (k, f, v) => {
+    setData((p) => ({
+      ...p,
+      equipment: { ...p.equipment, [k]: { ...p.equipment[k], [f]: v } },
     }));
   };
 
   const handleCreate = () => {
-    if(!formData.name || !formData.number) return;
     const finalEq = {};
-    ['manage', 'router', 'poe'].forEach(t => {
-      if(formData.equipment[t].checked) 
-        finalEq[t] = { ports: formData.equipment[t].ports, name: formData.equipment[t].name || (t==='manage'?'Switch':t==='router'?'Router':'POE') };
-    });
-    onCreate({ ...formData, equipment: finalEq });
+    if (data.equipment.manage.c)
+      finalEq.manage = { ports: data.equipment.manage.p, name: "Switch" };
+    if (data.equipment.router.c)
+      finalEq.router = { ports: data.equipment.router.p, name: "Router" };
+    if (data.equipment.poe.c)
+      finalEq.poe = { ports: data.equipment.poe.p, name: "POE" };
+
+    onCreate({ ...data, equipment: finalEq });
   };
 
   return (
-    <Modal title="បន្ថែមបន្ទប់ថ្មី" onClose={onClose} footer={
-      <>
-        <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">បោះបង់</button>
-        <button onClick={handleCreate} className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-md shadow-indigo-200 transition-colors">បង្កើត</button>
-      </>
-    }>
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">ឈ្មោះបន្ទប់</label>
-            <input className="w-full p-2.5 text-sm rounded-lg border border-slate-200 focus:border-indigo-500 outline-none font-bold text-slate-700 bg-slate-50 focus:bg-white transition-colors" 
-              placeholder="ឧ. David" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
+        onClick={onClose}
+      ></div>
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-enter border border-white/10">
+        {/* Wizard Header */}
+        <div className="px-6 md:px-8 py-6 bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold font-battambang text-slate-800 dark:text-white">
+              New Cabin Setup
+            </h3>
+            <button onClick={onClose}>
+              <i className="fas fa-times text-slate-400"></i>
+            </button>
           </div>
-          <div>
-            <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1">លេខកូដ</label>
-            <input className="w-full p-2.5 text-sm rounded-lg border border-slate-200 focus:border-indigo-500 outline-none font-bold text-slate-700 bg-slate-50 focus:bg-white transition-colors" 
-              placeholder="R-01-B" value={formData.number} onChange={e => setFormData({...formData, number: e.target.value})} />
-          </div>
-        </div>
-        
-        <div>
-          <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-2">តំបន់ (Zone)</label>
-          <div className="grid grid-cols-2 gap-3">
-            {['RB', 'RA'].map(sec => (
-              <label key={sec} className="cursor-pointer relative group">
-                <input type="radio" name="section" className="peer absolute opacity-0" checked={formData.section === sec} onChange={() => setFormData({...formData, section: sec})} />
-                <div className="p-2.5 text-xs font-bold border-2 border-slate-100 rounded-lg text-center peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:text-indigo-700 text-slate-400 transition-all group-hover:bg-slate-50">
-                  {sec === 'RB' ? 'Zone B (Left)' : 'Zone A (Right)'}
-                </div>
-              </label>
+          {/* Progress Bar */}
+          <div className="flex items-center gap-2">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
+                  step >= i ? "bg-indigo-500" : "bg-slate-200 dark:bg-slate-800"
+                }`}
+              ></div>
             ))}
           </div>
         </div>
-        
-        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-           <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-2">Network Equipment</label>
-           <div className="space-y-2">
-             {['manage', 'router', 'poe'].map(type => (
-               <div key={type} className="flex items-center gap-3 bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
-                 <input type="checkbox" checked={formData.equipment[type].checked} onChange={e => updateEq(type, 'checked', e.target.checked)} className="w-4 h-4 rounded text-indigo-600 border-slate-300 ml-1" />
-                 <span className="text-xs font-bold w-12 capitalize text-slate-600">{type === 'manage' ? 'SW' : type}</span>
-                 {formData.equipment[type].checked && (
-                   <select className="p-1 text-[10px] font-bold border bg-slate-50 rounded text-slate-700 ml-auto outline-none" value={formData.equipment[type].ports} onChange={e => updateEq(type, 'ports', e.target.value)}>
-                     <option value="8">8P</option><option value="12">12P</option><option value="24">24P</option><option value="48">48P</option>
-                   </select>
-                 )}
-               </div>
-             ))}
-           </div>
+
+        {/* Content */}
+        <div className="p-6 md:p-8 min-h-[300px]">
+          {step === 1 && (
+            <div className="space-y-4 animate-enter">
+              <h4 className="text-sm font-bold text-slate-500 uppercase">
+                Basic Information
+              </h4>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400">
+                  Cabin Name
+                </label>
+                <input
+                  autoFocus
+                  className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-bold outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="e.g. Server Room A"
+                  value={data.name}
+                  onChange={(e) => setData({ ...data, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-400">
+                  Cabin Identifier
+                </label>
+                <input
+                  className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-bold outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="e.g. R-01"
+                  value={data.number}
+                  onChange={(e) => setData({ ...data, number: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4 animate-enter">
+              <h4 className="text-sm font-bold text-slate-500 uppercase">
+                Location Zone
+              </h4>
+              {isLocked ? (
+                <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-500/30 rounded-xl flex items-center gap-4">
+                  <i className="fas fa-lock text-indigo-400"></i>
+                  <div>
+                    <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300">
+                      Zone Locked
+                    </p>
+                    <p className="text-xs text-indigo-500/80">
+                      Adding to {currentView === "RB" ? "Zone B" : "Zone A"}{" "}
+                      based on current view.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {["RB", "RA"].map((z) => (
+                    <button
+                      key={z}
+                      onClick={() => setData({ ...data, section: z })}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        data.section === z
+                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20"
+                          : "border-slate-200 dark:border-slate-800 hover:border-indigo-300"
+                      }`}
+                    >
+                      <span className="block text-lg font-black mb-1">
+                        {z === "RB" ? "B" : "A"}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">
+                        Zone {z === "RB" ? "Left" : "Right"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4 animate-enter">
+              <h4 className="text-sm font-bold text-slate-500 uppercase">
+                Hardware Config
+              </h4>
+              <div className="grid grid-cols-1 gap-3">
+                {["manage", "router", "poe"].map((id) => (
+                  <div
+                    key={id}
+                    onClick={() => updateEq(id, "c", !data.equipment[id].c)}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                      data.equipment[id].c
+                        ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20"
+                        : "border-slate-200 dark:border-slate-800 opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          data.equipment[id].c
+                            ? "bg-emerald-500 text-white"
+                            : "bg-slate-200 dark:bg-slate-700 text-slate-400"
+                        }`}
+                      >
+                        <i
+                          className={`fas ${
+                            id === "manage"
+                              ? "fa-network-wired"
+                              : id === "router"
+                              ? "fa-globe"
+                              : "fa-wifi"
+                          }`}
+                        ></i>
+                      </div>
+                      <span className="font-bold uppercase text-xs">{id}</span>
+                    </div>
+                    {data.equipment[id].c && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <select
+                          className="text-xs font-bold p-1 rounded bg-white dark:bg-slate-800 border-none outline-none"
+                          value={data.equipment[id].p}
+                          onChange={(e) => updateEq(id, "p", e.target.value)}
+                        >
+                          <option value="12">12P</option>
+                          <option value="24">24P</option>
+                          <option value="48">48P</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 bg-slate-50 dark:bg-slate-950 flex justify-between">
+          <button
+            disabled={step === 1}
+            onClick={() => setStep((s) => s - 1)}
+            className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 disabled:opacity-30 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+          >
+            Back
+          </button>
+
+          {step < 3 ? (
+            <button
+              onClick={() => setStep((s) => s + 1)}
+              className="px-6 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-all"
+            >
+              Next Step <i className="fas fa-arrow-right ml-1"></i>
+            </button>
+          ) : (
+            <button
+              onClick={handleCreate}
+              className="px-6 py-2 rounded-lg bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/30 hover:bg-emerald-600 transition-all"
+            >
+              Create Cabin <i className="fas fa-check ml-1"></i>
+            </button>
+          )}
         </div>
       </div>
-    </Modal>
+    </div>
   );
 };
 
-const EditPCModal = ({ initialData, onClose, onSave, onDelete }) => {
+// --- PC DETAIL MODAL (With Tabs) ---
+
+const PCDetailModal = ({ initialData, onClose, onSave, onDelete }) => {
+  const [tab, setTab] = useState("general");
   const [data, setData] = useState({
-    status: initialData.status || 'idle',
-    sourceType: initialData.sourceType || 'Manage',
-    sourceName: initialData.sourceName || '',
-    port: initialData.port || '',
-    info: initialData.info || ''
+    status: initialData.status || "idle",
+    sourceType: initialData.sourceType || "Manage",
+    sourceName: initialData.sourceName || "",
+    port: initialData.port || "",
+    info: initialData.info || "",
   });
 
   return (
-    <Modal title="កែប្រែ PC" onClose={onClose} footer={
-      <div className="flex w-full justify-between items-center">
-        <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-600 font-bold px-1 transition-colors">Reset</button>
-        <div className="flex gap-2">
-           <button onClick={onClose} className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">បោះបង់</button>
-           <button onClick={() => onSave(data)} className="px-3 py-1.5 text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">រក្សាទុក</button>
-        </div>
-      </div>
-    }>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-1.5">Status</label>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              {id: 'idle', label: 'ទំនេរ'}, {id: 'connected', label: 'Online'}, {id: 'offline', label: 'Offline'}
-            ].map(st => (
-              <button key={st.id} onClick={() => setData({...data, status: st.id})}
-                className={`p-2 text-[10px] font-bold uppercase rounded-lg border-2 transition-all ${data.status === st.id 
-                  ? (st.id === 'connected' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : st.id === 'offline' ? 'bg-red-50 border-red-400 text-red-700' : 'bg-white border-slate-500 text-slate-700') 
-                  : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}>
-                {st.label}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
+        onClick={onClose}
+      ></div>
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-enter border border-white/10">
+        {/* Header with Tabs */}
+        <div className="bg-slate-50 dark:bg-slate-950 p-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+              <span className="text-indigo-500">
+                {initialData.extraInfo.zone}
+              </span>{" "}
+              / <span>{initialData.extraInfo.cabin}</span> /{" "}
+              <span>{initialData.extraInfo.table}</span>
+            </div>
+            <button onClick={onClose}>
+              <i className="fas fa-times text-slate-400"></i>
+            </button>
+          </div>
+
+          <div className="flex bg-white dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+            {["general", "network", "actions"].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all ${
+                  tab === t
+                    ? "bg-indigo-500 text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                }`}
+              >
+                {t}
               </button>
             ))}
           </div>
         </div>
-        
-        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-           <div className="mb-2">
-             <label className="block text-[10px] font-bold text-slate-500 mb-1">User Name</label>
-             <input className="w-full p-2 text-xs rounded-lg border border-slate-200 focus:border-indigo-500 outline-none font-bold text-slate-700 focus:bg-white transition-colors" 
-              placeholder="e.g. Lorn David" value={data.info} onChange={e => setData({...data, info: e.target.value})} />
-          </div>
+
+        <div className="p-6 min-h-[250px]">
+          {tab === "general" && (
+            <div className="space-y-4 animate-enter">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">
+                  Current Status
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "idle", icon: "fa-moon", color: "slate" },
+                    { id: "connected", icon: "fa-check", color: "emerald" },
+                    { id: "offline", icon: "fa-ban", color: "rose" },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setData({ ...data, status: s.id })}
+                      className={`py-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all ${
+                        data.status === s.id
+                          ? `border-${s.color}-500 bg-${s.color}-50 dark:bg-${s.color}-500/20 text-${s.color}-600`
+                          : "border-slate-100 dark:border-slate-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      <i className={`fas ${s.icon}`}></i>
+                      <span className="text-[9px] font-bold uppercase">
+                        {s.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">
+                  User / Device Info
+                </label>
+                <input
+                  className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-bold outline-none text-slate-700 dark:text-white"
+                  value={data.info}
+                  onChange={(e) => setData({ ...data, info: e.target.value })}
+                  placeholder="e.g. Employee Name"
+                />
+              </div>
+            </div>
+          )}
+
+          {tab === "network" && (
+            <div className="space-y-4 animate-enter">
+              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-500/20">
+                <h5 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-3 flex items-center gap-2">
+                  <i className="fas fa-link"></i> Uplink Connection
+                </h5>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <label className="text-[9px] font-bold text-slate-400">
+                        Device Type
+                      </label>
+                      <select
+                        className="w-full mt-1 p-2 rounded-lg bg-white dark:bg-slate-800 text-xs font-bold border border-slate-200 dark:border-slate-700"
+                        value={data.sourceType}
+                        onChange={(e) =>
+                          setData({ ...data, sourceType: e.target.value })
+                        }
+                      >
+                        <option value="Manage">Manage Switch</option>
+                        <option value="Router">Router</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400">
+                        Port No.
+                      </label>
+                      <input
+                        className="w-full mt-1 p-2 rounded-lg bg-white dark:bg-slate-800 text-xs font-bold border border-slate-200 dark:border-slate-700 text-center"
+                        value={data.port}
+                        onChange={(e) =>
+                          setData({ ...data, port: e.target.value })
+                        }
+                        placeholder="#"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400">
+                      Source Name / IP
+                    </label>
+                    <input
+                      className="w-full mt-1 p-2 rounded-lg bg-white dark:bg-slate-800 text-xs font-bold border border-slate-200 dark:border-slate-700"
+                      value={data.sourceName}
+                      onChange={(e) =>
+                        setData({ ...data, sourceName: e.target.value })
+                      }
+                      placeholder="e.g. SW-Main-01"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "actions" && (
+            <div className="space-y-3 animate-enter">
+              <button className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300 font-bold text-xs">
+                <i className="fas fa-terminal"></i> Ping Check (Simulate)
+              </button>
+              <button className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300 font-bold text-xs">
+                <i className="fas fa-history"></i> View Log History
+              </button>
+              <div className="h-px bg-slate-100 dark:bg-slate-700 my-2"></div>
+              <button
+                onClick={onDelete}
+                className="w-full p-3 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-900/20 text-rose-600 font-bold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors"
+              >
+                Reset Configuration
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-           <label className="block text-[10px] font-extrabold text-slate-400 uppercase mb-2">Uplink Info</label>
-           <div className="grid grid-cols-3 gap-2 mb-2">
-              <div className="col-span-2">
-                <select className="w-full p-2 text-xs border border-slate-200 rounded-lg bg-white font-bold text-slate-600 outline-none focus:border-indigo-500" value={data.sourceType} onChange={e => setData({...data, sourceType: e.target.value})}>
-                  <option value="Manage">Switch</option><option value="Router">Router</option><option value="POE">POE</option>
-                </select>
-              </div>
-              <input className="w-full p-2 text-xs border border-slate-200 rounded-lg font-bold text-slate-700 text-center outline-none focus:border-indigo-500" placeholder="Port" value={data.port} onChange={e => setData({...data, port: e.target.value})} />
-            </div>
-            <input className="w-full p-2 text-xs border border-slate-200 rounded-lg font-bold text-slate-700 outline-none focus:border-indigo-500" placeholder="Device Name / IP" value={data.sourceName} onChange={e => setData({...data, sourceName: e.target.value})} />
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2 bg-slate-50 dark:bg-slate-950">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-white dark:hover:bg-slate-800 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(data)}
+            className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 hover:scale-105 transition-all"
+          >
+            Save Changes
+          </button>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 };
 
-// --- Main App ---
+// --- MAIN APPLICATION STRUCTURE ---
 
-function App() {
-  const [currentView, setCurrentView] = useState('all'); 
+const AppContent = () => {
+  const { theme, setTheme } = useContext(ThemeContext);
+  const addToast = useContext(ToastContext);
+
+  const [view, setView] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
-  // Search & Filter State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  
+  const [search, setSearch] = useState("");
   const [zones, setZones] = useState({ RA: {}, RB: {} });
-  const [stats, setStats] = useState({ total: 0, active: 0, idle: 0, offline: 0 });
-  const [expandedCabins, setExpandedCabins] = useState(new Set());
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    idle: 0,
+    offline: 0,
+  });
+  const [expanded, setExpanded] = useState(new Set());
   const [loading, setLoading] = useState(true);
 
-  // Modals
-  const [activeModal, setActiveModal] = useState(null);
+  // Modal States
+  const [modal, setModal] = useState(null); // 'addCabin', 'editPC', 'editTable'
   const [modalData, setModalData] = useState({});
 
   useEffect(() => {
-    const zonesRef = ref(db, 'zones');
-    const unsubscribe = onValue(zonesRef, (snapshot) => {
-      const data = snapshot.val() || { RA: {}, RB: {} };
-      setZones(data);
-      calculateStats(data);
+    const unsubscribe = onValue(ref(db, "zones"), (snap) => {
+      const d = snap.val() || { RA: {}, RB: {} };
+      setZones({ RA: d.RA || {}, RB: d.RB || {} });
+
+      let s = { total: 0, active: 0, idle: 0, offline: 0 };
+      ["RA", "RB"].forEach((z) => {
+        if (d[z])
+          Object.values(d[z]).forEach((c) => {
+            if (c.tables)
+              Object.values(c.tables).forEach((t) => {
+                if (t.pcs)
+                  Object.values(t.pcs).forEach((p) => {
+                    s.total++;
+                    if (p.status === "connected") s.active++;
+                    else if (p.status === "offline") s.offline++;
+                    else s.idle++;
+                  });
+              });
+          });
+      });
+      setStats(s);
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  const calculateStats = (data) => {
-    let s = { total: 0, active: 0, idle: 0, offline: 0 };
-    ['RA', 'RB'].forEach(z => {
-      if(data[z]) Object.values(data[z]).forEach(cabin => {
-        if(cabin.tables) Object.values(cabin.tables).forEach(t => {
-          Object.values(t.pcs).forEach(pc => {
-            s.total++;
-            if(pc.status === 'connected') s.active++;
-            else if(pc.status === 'offline') s.offline++;
-            else s.idle++;
-          });
-        });
-      });
-    });
-    setStats(s);
+  // Handlers
+  const handleNav = (v) => {
+    setView(v);
+    setSidebarOpen(false);
+  };
+  const toggleExp = (id) => {
+    const s = new Set(expanded);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setExpanded(s);
   };
 
-  const handleNavClick = (view) => {
-    setCurrentView(view);
-    if(window.innerWidth < 768) setSidebarOpen(false);
-  };
-
-  const toggleCabin = (id) => {
-    const newSet = new Set(expandedCabins);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setExpandedCabins(newSet);
-  };
-
-  // CRUD Operations
-  const handleCreateCabin = async (formData) => {
+  const createCabin = async (data) => {
     const tables = {};
-    for (let t = 1; t <= 2; t++) { 
+    for (let i = 1; i <= 8; i++) {
       const pcs = {};
-      for (let p = 1; p <= 6; p++) {
-        pcs[`pc${p}`] = { status: 'idle', sourceType: '', sourceName: '', port: '', info: '' };
-      }
-      tables[`table${t}`] = { name: `Table ${t}`, pcs: pcs };
+      for (let j = 1; j <= 6; j++) pcs[`pc${j}`] = { status: "idle", info: "" };
+      tables[`table${i}`] = { name: `Table ${i}`, pcs };
     }
-
-    const newCabin = {
-      name: formData.name, number: formData.number, type: formData.section,
-      createdAt: Date.now(), equipment: formData.equipment, tables: tables
+    const payload = {
+      name: data.name,
+      number: data.number,
+      type: data.section,
+      createdAt: Date.now(),
+      equipment: data.equipment,
+      tables,
     };
-
-    await set(push(ref(db, `zones/${formData.section}`)), newCabin);
-    setActiveModal(null);
+    try {
+      await set(push(ref(db, `zones/${data.section}`)), payload);
+      addToast("Cabin deployed successfully");
+      setModal(null);
+    } catch {
+      addToast("Deployment failed", "error");
+    }
   };
 
-  const handleUpdateTable = async (name) => {
+  const updatePC = async (data) => {
+    try {
+      await update(ref(db, modalData.path), data);
+      addToast("PC Updated");
+      setModal(null);
+    } catch {
+      addToast("Error", "error");
+    }
+  };
+
+  const resetPC = async () => {
+    try {
+      await update(ref(db, modalData.path), {
+        status: "idle",
+        info: "",
+        sourceType: "",
+        sourceName: "",
+        port: "",
+      });
+      addToast("PC Reset");
+      setModal(null);
+    } catch {
+      addToast("Error", "error");
+    }
+  };
+
+  const updateTable = async (name) => {
     await update(ref(db, modalData.path), { name });
-    setActiveModal(null);
-  };
-
-  const handleUpdatePC = async (data) => {
-    await update(ref(db, modalData.path), data);
-    setActiveModal(null);
-  };
-
-  const handleDeletePC = async () => {
-    await update(ref(db, modalData.path), { status: 'idle', info: '', sourceName: '', sourceType: 'Manage', port: '' });
-    setActiveModal(null);
+    setModal(null);
   };
 
   const deleteCabin = async (section, id) => {
-    if(confirm("Delete this cabin?")) await remove(ref(db, `zones/${section}/${id}`));
+    if (confirm("Confirm deletion?")) {
+      await remove(ref(db, `zones/${section}/${id}`));
+      addToast("Cabin removed");
+    }
   };
 
-  // Helper to filter and render cabins
-  const renderZoneList = (section) => {
-    const items = zones[section] || {};
-    
-    // Filter Logic
-    const filtered = Object.entries(items).filter(([_, cabin]) => {
-      let matchesSearch = true;
-      if (searchTerm) {
-        const t = searchTerm.toLowerCase();
-        const cabinMatch = cabin.name.toLowerCase().includes(t) || cabin.number.toLowerCase().includes(t);
-        let pcMatch = false;
-        if(cabin.tables) {
-          pcMatch = Object.values(cabin.tables).some(table => 
-             Object.values(table.pcs).some(pc => 
-               (pc.info && pc.info.toLowerCase().includes(t)) || 
-               (pc.sourceName && pc.sourceName.toLowerCase().includes(t))
-             ) || table.name.toLowerCase().includes(t)
-          );
-        }
-        matchesSearch = cabinMatch || pcMatch;
-      }
+  // Renderers
+  const renderList = (sec) => {
+    const list = Object.entries(zones[sec] || {}).filter(
+      ([_, c]) =>
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.number.toLowerCase().includes(search.toLowerCase())
+    );
 
-      let matchesStatus = true;
-      if (filterStatus !== 'all') {
-        if(cabin.tables) {
-           matchesStatus = Object.values(cabin.tables).some(table => 
-              Object.values(table.pcs).some(pc => pc.status === filterStatus)
-           );
-        } else { matchesStatus = false; }
-      }
+    if (list.length === 0)
+      return (
+        <div className="flex flex-col items-center justify-center p-12 opacity-50">
+          <i className="fas fa-box-open text-4xl mb-2 text-slate-300 dark:text-slate-700"></i>
+          <p className="font-bold text-xs text-slate-400">
+            No cabins found here.
+          </p>
+        </div>
+      );
 
-      return matchesSearch && matchesStatus;
-    });
-
-    if(filtered.length === 0) return <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-300 font-bold text-sm bg-white mt-4">No results found</div>;
-
-    return filtered.map(([id, cabin]) => (
-      <CabinCard 
-        key={id} cabinId={id} cabin={cabin} section={section}
-        isExpanded={expandedCabins.has(id) || searchTerm !== ''}
-        toggleExpand={() => toggleCabin(id)}
-        onDelete={() => deleteCabin(section, id)}
-        onEditTable={(p, n) => { setModalData({path:p, name:n}); setActiveModal('editTable'); }}
-        onEditPC={(p, d) => { setModalData({path:p, ...d}); setActiveModal('editPC'); }}
+    return list.map(([id, c]) => (
+      <CabinCard
+        key={id}
+        id={id}
+        cabin={c}
+        section={sec}
+        isExpanded={expanded.has(id) || search.length > 0}
+        toggle={() => toggleExp(id)}
+        onDelete={() => deleteCabin(sec, id)}
+        onEditTable={(p, n) => {
+          setModalData({ path: p, name: n });
+          setModal("editTable");
+        }}
+        onEditPC={(p, d, cn, tn, z) => {
+          setModalData({
+            path: p,
+            ...d,
+            extraInfo: { cabin: cn, table: tn, zone: z },
+          });
+          setModal("editPC");
+        }}
       />
     ));
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f3f4f6]">
-      
-      {/* Mobile Backdrop */}
-      {sidebarOpen && <div className="fixed inset-0 bg-slate-900/60 z-30 md:hidden backdrop-blur-sm transition-opacity" onClick={() => setSidebarOpen(false)}></div>}
-
-      {/* Sidebar */}
-      <aside className={`fixed md:relative z-40 w-72 h-full bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-2xl md:shadow-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="h-20 flex items-center px-6 bg-white">
-           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white mr-3 shadow-lg shadow-indigo-200">
-             <i className="fas fa-network-wired text-lg"></i>
-           </div>
-           <div>
-             <span className="font-extrabold text-slate-800 text-xl tracking-tight font-battambang">NetworkDI</span>
-             <p className="text-[10px] text-slate-400 font-bold tracking-wider">NETWORK SYSTEM</p>
-           </div>
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#020617] transition-colors duration-300">
+      {/* SIDEBAR */}
+      <aside
+        className={`fixed md:relative z-50 h-full w-72 glass-panel border-r-0 md:border-r border-white/20 flex flex-col transition-transform duration-300 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        }`}
+      >
+        <div className="h-20 md:h-24 flex items-center px-6 md:px-8">
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/40 mr-3">
+            <i className="fas fa-globe"></i>
+          </div>
+          <div>
+            <h1 className="font-extrabold text-lg md:text-xl tracking-tight text-slate-800 dark:text-white font-battambang">
+              NetAdmin
+            </h1>
+            <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Enterprise
+            </span>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden ml-auto text-slate-400"
+          >
+            <i className="fas fa-times"></i>
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4">
-          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 ml-2">Main Menu</p>
-          <NavItem icon="fa-chart-pie" label="តំបន់ទាំងអស់" active={currentView === 'all'} onClick={() => handleNavClick('all')} />
-          <NavItem icon="fa-server" label="តំបន់ B (RB)" active={currentView === 'RB'} onClick={() => handleNavClick('RB')} count={Object.keys(zones.RB).length} />
-          <NavItem icon="fa-layer-group" label="តំបន់ A (RA)" active={currentView === 'RA'} onClick={() => handleNavClick('RA')} count={Object.keys(zones.RA).length} />
-          
-          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mt-6 mb-3 ml-2">Other</p>
-          <NavItem icon="fa-life-ring" label="ជំនួយ" active={currentView === 'help'} onClick={() => handleNavClick('help')} />
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 custom-scrollbar">
+          <p className="px-4 text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3">
+            Analytics
+          </p>
+          <button
+            onClick={() => handleNav("all")}
+            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
+              view === "all"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
+                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
+            }`}
+          >
+            <i className="fas fa-chart-pie w-5 text-center"></i> Dashboard
+          </button>
+
+          <p className="px-4 text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mt-8 mb-3">
+            Zone Management
+          </p>
+          <button
+            onClick={() => handleNav("RB")}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
+              view === "RB"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
+                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <i className="fas fa-server w-5 text-center"></i> Zone B (Left)
+            </div>
+            <span className="px-2 py-0.5 rounded bg-white/20 text-[10px]">
+              {Object.keys(zones.RB).length}
+            </span>
+          </button>
+          <button
+            onClick={() => handleNav("RA")}
+            className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all font-bold text-sm ${
+              view === "RA"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
+                : "text-slate-500 hover:bg-white dark:hover:bg-white/5"
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <i className="fas fa-layer-group w-5 text-center"></i> Zone A
+              (Right)
+            </div>
+            <span className="px-2 py-0.5 rounded bg-white/20 text-[10px]">
+              {Object.keys(zones.RA).length}
+            </span>
+          </button>
         </div>
 
-        <div className="p-5 border-t border-slate-50 text-center bg-white">
-           
+        {/* User Profile */}
+        <div className="p-6 border-t border-slate-200 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-sm shadow-lg border-2 border-white dark:border-slate-800">
+              AD
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-800 dark:text-white">
+                Admin User
+              </p>
+              <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wide">
+                ● Online
+              </p>
+            </div>
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="ml-auto w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-indigo-500 transition-colors"
+            >
+              <i
+                className={`fas ${theme === "dark" ? "fa-moon" : "fa-sun"}`}
+              ></i>
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#f3f4f6]">
+      {/* MAIN CONTENT */}
+      <main className="flex-1 flex flex-col relative h-full overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-20 shadow-sm">
-          <div className="flex items-center">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg mr-3 transition-colors">
+        <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-white/5">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="md:hidden text-slate-500 dark:text-slate-300"
+            >
               <i className="fas fa-bars text-xl"></i>
             </button>
-            <h2 className="text-lg font-bold text-slate-800 font-battambang">
-              {currentView === 'all' ? 'ផ្ទាំងគ្រប់គ្រងអុីនធើណេត' : currentView === 'help' ? 'មជ្ឈមណ្ឌលជំនួយ' : `តំបន់ ${currentView === 'RB' ? 'B' : 'A'}`}
-            </h2>
+            <div>
+              <h2 className="text-lg md:text-xl font-black text-slate-800 dark:text-white tracking-tight font-battambang">
+                {view === "all"
+                  ? "System Overview"
+                  : `Zone ${view === "RB" ? "B" : "A"} Manager`}
+              </h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
+                Realtime Network Monitoring
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-             <div className="hidden sm:flex flex-col items-end mr-1">
-                <span className="text-xs font-bold text-slate-700">Admin User</span>
-                <span className="text-[10px] font-bold text-emerald-500">● Online</span>
-             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center font-bold text-sm shadow-md ring-4 ring-white cursor-pointer">
-              A
+          {/* Desktop Search */}
+          <div className="hidden md:flex items-center gap-4">
+            <div className="relative group">
+              <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors"></i>
+              <input
+                className="pl-10 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border-none outline-none font-bold text-xs text-slate-600 dark:text-slate-300 w-64 focus:ring-2 focus:ring-indigo-500/50 transition-all"
+                placeholder="Search Cabins, IPs..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
+            <button
+              onClick={() => setModal("addCabin")}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-500/30 text-xs font-bold transition-transform hover:-translate-y-0.5 active:scale-95 flex items-center gap-2"
+            >
+              <i className="fas fa-plus"></i> New Cabin
+            </button>
+          </div>
+
+          {/* Mobile Search Icon & Add Button */}
+          <div className="flex md:hidden gap-2">
+            <button
+              onClick={() => setModal("addCabin")}
+              className="bg-indigo-600 text-white w-9 h-9 rounded-lg flex items-center justify-center shadow-lg"
+            >
+              <i className="fas fa-plus text-xs"></i>
+            </button>
           </div>
         </header>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar pb-24">
-          
-          {/* SEARCH & FILTER BAR - MAIN CONTENT */}
-          {(currentView === 'all' || currentView === 'RA' || currentView === 'RB') && (
-             <FilterBar 
-                searchTerm={searchTerm} setSearchTerm={setSearchTerm} 
-                filterStatus={filterStatus} setFilterStatus={setFilterStatus} 
-             />
-          )}
+        {/* Mobile Search Input */}
+        <div className="md:hidden px-4 py-3 bg-white/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/5">
+          <div className="relative">
+            <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input
+              className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-xs font-bold outline-none border border-transparent focus:border-indigo-500 dark:text-white"
+              placeholder="Search cabins..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
 
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar pb-32">
           {loading ? (
-            <div className="flex justify-center py-32 text-indigo-200"><i className="fas fa-circle-notch animate-spin text-4xl"></i></div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Skeleton className="h-24 md:h-32 rounded-2xl" />
+                <Skeleton className="h-24 md:h-32 rounded-2xl" />
+                <Skeleton className="h-24 md:h-32 rounded-2xl" />
+                <Skeleton className="h-24 md:h-32 rounded-2xl" />
+              </div>
+              <Skeleton className="h-64 rounded-2xl" />
+            </div>
           ) : (
             <>
-              {currentView === 'help' ? (
-                 <div className="flex flex-col items-center justify-center h-full text-center text-slate-300 font-battambang">
-                   <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
-                      <i className="fas fa-book-open text-5xl text-slate-200"></i>
-                   </div>
-                   <h3 className="text-xl font-bold text-slate-400 mb-1">មជ្ឈមណ្ឌលជំនួយ</h3>
-                   <p className="text-xs">មិនទាន់មានឯកសារនៅឡើយទេ</p>
-                 </div>
+              {view === "all" && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5 mb-6 md:mb-8">
+                  <StatWidget
+                    title="Total Devices"
+                    value={stats.total}
+                    icon="fa-desktop"
+                    color="indigo"
+                    delay="0"
+                  />
+                  <StatWidget
+                    title="Active Online"
+                    value={stats.active}
+                    icon="fa-wifi"
+                    trend={12}
+                    color="emerald"
+                    delay="100"
+                  />
+                  <StatWidget
+                    title="System Idle"
+                    value={stats.idle}
+                    icon="fa-moon"
+                    color="slate"
+                    delay="200"
+                  />
+                  <StatWidget
+                    title="Connection Issues"
+                    value={stats.offline}
+                    icon="fa-exclamation-triangle"
+                    color="rose"
+                    delay="300"
+                  />
+                </div>
+              )}
+
+              {view === "all" ? (
+                <div className="grid xl:grid-cols-2 gap-8 animate-enter">
+                  <div>
+                    <div className="flex items-center gap-3 mb-5">
+                      <span className="w-3 h-3 rounded bg-indigo-500"></span>
+                      <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                        Zone B (Left Wing)
+                      </h3>
+                    </div>
+                    {renderList("RB")}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-5">
+                      <span className="w-3 h-3 rounded bg-purple-500"></span>
+                      <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest">
+                        Zone A (Right Wing)
+                      </h3>
+                    </div>
+                    {renderList("RA")}
+                  </div>
+                </div>
               ) : (
-                <>
-                  {/* Stats */}
-                  {currentView === 'all' && (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                      <StatCard title="TOTAL DEVICES" value={stats.total} icon="fa-desktop" bg="bg-indigo-50" color="text-indigo-600" />
-                      <StatCard title="ONLINE" value={stats.active} icon="fa-wifi" bg="bg-emerald-50" color="text-emerald-500" />
-                      <StatCard title="IDLE" value={stats.idle} icon="fa-moon" bg="bg-slate-100" color="text-slate-400" />
-                      <StatCard title="OFFLINE" value={stats.offline} icon="fa-exclamation" bg="bg-red-50" color="text-red-400" />
-                    </div>
-                  )}
-
-                  {/* Overview Layout */}
-                  {currentView === 'all' ? (
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                        {/* Zone B */}
-                        <div>
-                           <div className="flex items-center justify-between mb-4 px-1">
-                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                               <span className="w-2.5 h-2.5 bg-indigo-500 rounded-sm"></span> ZONE B (RB)
-                             </h3>
-                           </div>
-                           {renderZoneList('RB')}
-                        </div>
-
-                        {/* Zone A */}
-                        <div>
-                           <div className="flex items-center justify-between mb-4 px-1">
-                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                               <span className="w-2.5 h-2.5 bg-purple-500 rounded-sm"></span> ZONE A (RA)
-                             </h3>
-                           </div>
-                           {renderZoneList('RA')}
-                        </div>
-                    </div>
-                  ) : (
-                    /* Single Zone View */
-                    <div className="max-w-5xl mx-auto">
-                       {/* Add Cabin Button for Specific Zone */}
-                       <div className="flex justify-end mb-4">
-                          <button 
-                             onClick={() => setActiveModal('addCabin')} 
-                             className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-200 text-xs font-bold font-battambang flex items-center gap-2 transition-all transform hover:scale-105"
-                           >
-                             <i className="fas fa-plus text-sm"></i> បន្ថែមទូថ្មី
-                           </button>
-                       </div>
-                       {renderZoneList(currentView)}
-                    </div>
-                  )}
-                </>
+                <div className="max-w-5xl mx-auto animate-enter">
+                  {renderList(view)}
+                </div>
               )}
             </>
           )}
         </div>
       </main>
 
-      {/* Modals */}
-      {activeModal === 'addCabin' && <AddCabinModal onClose={() => setActiveModal(null)} onCreate={handleCreateCabin} />}
-      {activeModal === 'editTable' && (
-        <Modal title="កែប្រែឈ្មោះតុ" onClose={() => setActiveModal(null)} footer={
-          <button onClick={() => handleUpdateTable(modalData.name)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold font-battambang shadow-md">រក្សាទុក</button>
-        }>
-          <input className="w-full border-2 border-slate-100 p-3 rounded-xl focus:border-indigo-500 outline-none font-bold text-slate-700 text-sm" value={modalData.name} onChange={e => setModalData({...modalData, name: e.target.value})} />
-        </Modal>
+      {/* MODALS INJECTION */}
+      {modal === "addCabin" && (
+        <AddCabinWizard
+          onClose={() => setModal(null)}
+          onCreate={createCabin}
+          currentView={view}
+        />
       )}
-      {activeModal === 'editPC' && <EditPCModal initialData={modalData} onClose={() => setActiveModal(null)} onSave={handleUpdatePC} onDelete={handleDeletePC} />}
-
+      {modal === "editPC" && (
+        <PCDetailModal
+          initialData={modalData}
+          onClose={() => setModal(null)}
+          onSave={updatePC}
+          onDelete={resetPC}
+        />
+      )}
+      {modal === "editTable" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-full max-w-sm animate-enter border border-white/10">
+            <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">
+              Rename Table
+            </h3>
+            <input
+              autoFocus
+              className="w-full p-3 mb-4 border rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 outline-none font-bold dark:text-white"
+              value={modalData.name}
+              onChange={(e) =>
+                setModalData({ ...modalData, name: e.target.value })
+              }
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setModal(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => updateTable(modalData.name)}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-lg"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
 
-const root = createRoot(document.getElementById('root'));
+const App = () => (
+  <ThemeProvider>
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  </ThemeProvider>
+);
+
+const root = createRoot(document.getElementById("root"));
 root.render(<App />);
